@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NV Proxy Dashboard</title>
+    <script>
+        (function () {
+            try {
+                var saved = localStorage.getItem('nv-theme');
+                var system = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+                document.documentElement.dataset.theme = saved || system;
+            } catch (e) {
+                document.documentElement.dataset.theme = 'dark';
+            }
+        })();
+    </script>
+    <!-- Google Fonts Outfit -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Lucide Icons CDN -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body class="dashboard-body">
+    <div class="app-layout">
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar" id="sidebarMenu">
+            <div class="brand">
+                <div class="logo">
+                    <i data-lucide="layers" class="brand-icon"></i>
+                </div>
+                <div class="brand-text">
+                    <h2>NV Proxy</h2>
+                    <span>Manager</span>
+                </div>
+            </div>
+            <nav class="sidebar-nav">
+                <a href="#" class="nav-item active" data-tab="overview">
+                    <i data-lucide="layout-dashboard"></i> <span>Overview</span>
+                </a>
+                <a href="#" class="nav-item" data-tab="analytics">
+                    <i data-lucide="line-chart"></i> <span>Analytics</span>
+                </a>
+                <a href="#" class="nav-item" data-tab="miners">
+                    <i data-lucide="cpu"></i> <span>Miners</span>
+                </a>
+                <a href="#" class="nav-item" data-tab="users">
+                    <i data-lucide="users"></i> <span>Users</span>
+                </a>
+                <a href="#" class="nav-item" data-tab="settings">
+                    <i data-lucide="settings"></i> <span>Settings</span>
+                </a>
+            </nav>
+            <div class="sidebar-footer">
+                <div class="user-meta">
+                    <div class="user-avatar">
+                        <i data-lucide="user"></i>
+                    </div>
+                    <div class="user-details">
+                        <span class="user-role">Administrator</span>
+                        <span class="user-name">{{ username }}</span>
+                    </div>
+                </div>
+                <a href="{{ url_for('logout') }}" class="btn-logout" title="Sign Out">
+                    <i data-lucide="log-out"></i>
+                </a>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <!-- Top Header Bar -->
+            <header class="top-bar">
+                <div class="top-bar-left">
+                    <button class="menu-toggle" id="menuToggle" aria-label="Open Menu">
+                        <i data-lucide="menu"></i>
+                    </button>
+                    <div class="page-title-area">
+                        <h1 id="pageActiveTitle">Overview</h1>
+                        <span id="workerId" class="worker-info">Verifying connection status...</span>
+                    </div>
+                </div>
+                <div class="top-bar-right">
+                    <button type="button" class="theme-toggle" data-theme-toggle aria-label="Switch color theme" title="Switch color theme">
+                        <i data-lucide="sun"></i>
+                    </button>
+                    <span id="statusBadge" class="status-badge status-offline">Loading...</span>
+                    <span class="update-info">
+                        <i data-lucide="refresh-cw" class="update-icon" id="manualRefreshBtn"></i> 
+                        <span class="desktop-only">Updated:</span> <span id="lastUpdate">--</span>
+                    </span>
+                </div>
+            </header>
+
+            <!-- Alert Container for notifications -->
+            <div id="alertContainer" class="alert-container"></div>
+
+            <!-- dynamic sections -->
+            <!-- 1. OVERVIEW -->
+            <section id="tab-overview" class="tab-pane active">
+                <div id="dashboardOverview" class="loading">
+                    <div class="spinner"></div>
+                    <p>Fetching global metrics from XMRig Proxy...</p>
+                </div>
+            </section>
+
+            <!-- 2. ANALYTICS -->
+            <section id="tab-analytics" class="tab-pane">
+                <div class="grid double-grid">
+                    <!-- Hashrate Chart -->
+                    <div class="card chart-card">
+                        <div class="card-header-flex">
+                            <div>
+                                <h3 class="card-title">Hashrate Metrics</h3>
+                                <span class="chart-legend">10s average logged in real-time (H/s)</span>
+                            </div>
+                            <div class="chart-icon-holder"><i data-lucide="trending-up"></i></div>
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="hashrateChartCanvas"></canvas>
+                        </div>
+                    </div>
+                    <!-- Miners Chart -->
+                    <div class="card chart-card">
+                        <div class="card-header-flex">
+                            <div>
+                                <h3 class="card-title">Connected Miners</h3>
+                                <span class="chart-legend">History of active rigs connected to the proxy</span>
+                            </div>
+                            <div class="chart-icon-holder"><i data-lucide="users"></i></div>
+                        </div>
+                        <div class="chart-container">
+                            <canvas id="minersChartCanvas"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Profit Calculator and Estimator -->
+                <div class="card large-card profit-card">
+                    <div class="card-header-flex border-bottom">
+                        <div>
+                            <h3 class="card-title">Real-Time Profit Estimator</h3>
+                            <p class="card-label">Calculated based on network difficulty and current Monero (XMR) price</p>
+                        </div>
+                            <div class="chart-icon-holder accent"><i data-lucide="dollar-sign"></i></div>
+                    </div>
+                    <div class="profit-calculator-grid">
+                        <div class="calc-input-area">
+                            <div class="input-group">
+                                <label class="input-label" for="calcHashrateInput">Your Total Hashrate</label>
+                                <div class="input-with-select">
+                                    <input type="number" id="calcHashrateInput" class="input-field" value="50" min="0" step="any">
+                                    <select id="calcHashrateUnit" class="input-field select-field">
+                                        <option value="H">H/s</option>
+                                        <option value="KH" selected>KH/s</option>
+                                        <option value="MH">MH/s</option>
+                                    </select>
+                                </div>
+                            </div>
+                            <div class="market-info-list">
+                                <div class="market-info-item">
+                                    <span class="lbl"><i data-lucide="hash"></i> Network Difficulty:</span>
+                                    <span class="val" id="networkDifficultyVal">Loading...</span>
+                                </div>
+                                <span class="divider"></span>
+                                <div class="market-info-item">
+                                    <span class="lbl"><i data-lucide="coins"></i> XMR / USD:</span>
+                                    <span class="val highlight-green" id="xmrPriceVal">Loading...</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="calc-results-area">
+                            <div class="profit-box day-box">
+                                <div class="profit-box-title">Estimated Profit / Day</div>
+                                <div class="profit-box-value xmr" id="profitDayXmr">0.00000 XMR</div>
+                                <div class="profit-box-value usd" id="profitDayUsd">$0.00 USD</div>
+                            </div>
+                            <div class="profit-box month-box">
+                                <div class="profit-box-title">Estimated Profit / Month</div>
+                                <div class="profit-box-value xmr" id="profitMonthXmr">0.00000 XMR</div>
+                                <div class="profit-box-value usd" id="profitMonthUsd">$0.00 USD</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 3. MINERS -->
+            <section id="tab-miners" class="tab-pane">
+                <div class="card large-card">
+                    <div class="card-header-flex search-flex">
+                        <div>
+                            <h3 class="card-title">Connected Miners</h3>
+                            <span class="card-label">Active miners submitting shares through the proxy</span>
+                        </div>
+                        <div class="search-box">
+                            <i data-lucide="search" class="search-icon"></i>
+                            <input type="text" id="minersSearchInput" class="input-field" placeholder="Filter by name, IP, rig ID...">
+                        </div>
+                    </div>
+                    <div class="table-wrapper">
+                        <table class="miners-table">
+                            <thead>
+                                <tr>
+                                    <th>Worker</th>
+                                    <th>Rig ID</th>
+                                    <th>IP</th>
+                                    <th>Hash 10s</th>
+                                    <th>Hash 1m</th>
+                                    <th>Accepted</th>
+                                    <th>Rejected</th>
+                                    <th>Diff</th>
+                                    <th>Agent</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="minersTableBody">
+                                <tr>
+                                    <td colspan="10" class="loading">
+                                        <div class="spinner"></div> Loading connection list...
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 4. USERS -->
+            <section id="tab-users" class="tab-pane">
+                <div class="grid double-grid">
+                    <!-- User list table -->
+                    <div class="card">
+                        <div class="card-header-flex">
+                            <div>
+                                <h3 class="card-title">Panel Users</h3>
+                                <span class="card-label">Dashboard access accounts management</span>
+                            </div>
+                            <div class="chart-icon-holder"><i data-lucide="users-round"></i></div>
+                        </div>
+                        <div class="table-wrapper">
+                            <table class="miners-table compact-table">
+                                <thead>
+                                    <tr>
+                                        <th>Username</th>
+                                        <th>Role</th>
+                                        <th>Created At</th>
+                                        <th class="cell-center">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="usersTableBody">
+                                    <tr>
+                                        <td colspan="4" class="loading">
+                                            <div class="spinner"></div> Loading administrators...
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <!-- Create User Form -->
+                    <div class="card">
+                        <div class="card-header-flex">
+                            <div>
+                                <h3 class="card-title">New User</h3>
+                                <span class="card-label">Create a new administrative account</span>
+                            </div>
+                            <div class="chart-icon-holder accent"><i data-lucide="user-plus"></i></div>
+                        </div>
+                        <form id="createUserForm" class="dashboard-form">
+                            <div class="input-group">
+                                <label class="input-label" for="newUsername">Username</label>
+                                <input type="text" id="newUsername" class="input-field" placeholder="Ex: supervisor" required autocomplete="username">
+                            </div>
+                            <div class="input-group">
+                                <label class="input-label" for="newPassword">Password</label>
+                                <input type="password" id="newPassword" class="input-field" placeholder="Minimum 6 characters..." required autocomplete="new-password">
+                            </div>
+                            <div class="input-group">
+                                <label class="input-label" for="newRole">Permission Level</label>
+                                <select id="newRole" class="input-field select-field">
+                                    <option value="admin">Administrator (Full Access)</option>
+                                    <option value="viewer">Viewer (Read-Only)</option>
+                                </select>
+                            </div>
+                            <button type="submit" class="btn btn-block">
+                                <i data-lucide="plus"></i> Create User
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </section>
+
+            <!-- 5. SETTINGS -->
+            <section id="tab-settings" class="tab-pane">
+                <div class="grid double-grid">
+                    <!-- Left Column: Daemon Control & Panel Override -->
+                    <div class="dashboard-column">
+                        
+                        <!-- Daemon control settings -->
+                        <div class="card">
+                            <div class="card-header-flex border-bottom">
+                                <div>
+                                    <h3 class="card-title">XMRig Proxy Process</h3>
+                                    <p class="card-label">Run and monitor the proxy daemon in the background</p>
+                                </div>
+                                <div class="chart-icon-holder"><i data-lucide="play-circle"></i></div>
+                            </div>
+                            <div class="stat-row compact">
+                                <span class="stat-label inline-label">
+                                    <i data-lucide="activity"></i> Proxy Daemon Status
+                                </span>
+                                <span id="proxyProcessBadge" class="status-badge status-offline">Stopped</span>
+                            </div>
+                            <div class="settings-actions spaced">
+                                <button type="button" id="startProxyBtn" class="btn btn-success">
+                                    <i data-lucide="play"></i> Start Proxy
+                                </button>
+                                <button type="button" id="stopProxyBtn" class="btn btn-secondary btn-danger">
+                                    <i data-lucide="square"></i> Stop Proxy
+                                </button>
+                            </div>
+                            
+                            <div class="input-group">
+                                <label class="input-label label-row">
+                                    <span>Proxy Daemon Outputs (Last 25 lines)</span>
+                                    <button type="button" id="refreshLogsBtn" class="text-action" title="Refresh logs manually">
+                                        <i data-lucide="refresh-cw"></i> Refresh
+                                    </button>
+                                </label>
+                                <pre id="proxyLogsTerminal" class="terminal">No logs available.</pre>
+                            </div>
+                        </div>
+
+                        <!-- Connection overrides -->
+                        <div class="card">
+                            <div class="card-header-flex border-bottom">
+                                <div>
+                                    <h3 class="card-title">Dashboard Connection Override</h3>
+                                    <p class="card-label">Configure the panel connection to the XMRig API endpoint</p>
+                                </div>
+                                <div class="chart-icon-holder"><i data-lucide="link"></i></div>
+                            </div>
+                            <div class="card-description-box">
+                                <i data-lucide="info" class="desc-icon"></i>
+                                <p>
+                                    These credentials target the XMRig API used by this panel to collect stats. Clearing them restores default <code>.env</code> settings.
+                                </p>
+                            </div>
+                            <form id="settingsForm" class="dashboard-form">
+                                <div class="input-group">
+                                    <label class="input-label" for="settingsProxyUrl">Endpoint API URL</label>
+                                    <input type="url" id="settingsProxyUrl" class="input-field" placeholder="e.g. http://127.0.0.1:8080">
+                                    <span class="field-hint" id="hintEnvUrl">Loading default value...</span>
+                                </div>
+                                <div class="input-group">
+                                    <label class="input-label" for="settingsProxyToken">Bearer Authorization Token</label>
+                                    <input type="password" id="settingsProxyToken" class="input-field" placeholder="Fill to override token...">
+                                    <span class="field-hint" id="hintEnvToken">Loading default status...</span>
+                                </div>
+                                <div class="settings-actions">
+                                    <button type="submit" class="btn">
+                                        <i data-lucide="save"></i> Save Override
+                                    </button>
+                                    <button type="button" id="resetSettingsBtn" class="btn btn-secondary">
+                                        <i data-lucide="rotate-ccw"></i> Restore .env
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+
+                    <!-- Right Column: config.json Editor -->
+                    <div class="card">
+                        <div class="card-header-flex border-bottom">
+                            <div>
+                                <h3 class="card-title">Proxy Daemon Configuration</h3>
+                                <p class="card-label">Manage mining parameters in proxy <code>config.json</code></p>
+                            </div>
+                            <div class="chart-icon-holder accent"><i data-lucide="sliders"></i></div>
+                        </div>
+                        <form id="proxyConfigForm" class="dashboard-form form-offset">
+                            <div class="input-group">
+                                <label class="input-label" for="cfgPoolUrl">Upstream Pool URL</label>
+                                <input type="text" id="cfgPoolUrl" class="input-field" placeholder="e.g. pool.supportxmr.com:443" required>
+                                <span class="field-hint">The hostname and port of the mining pool.</span>
+                            </div>
+                            <div class="input-group">
+                                <label class="input-label" for="cfgPoolUser">Wallet / Username</label>
+                                <input type="text" id="cfgPoolUser" class="input-field" placeholder="e.g. Your XMR wallet address" required>
+                                <span class="field-hint">The Monero address or pool account login.</span>
+                            </div>
+                            <div class="input-group">
+                                <label class="input-label" for="cfgPoolPass">Pool Password</label>
+                                <input type="text" id="cfgPoolPass" class="input-field" placeholder="x" value="x">
+                                <span class="field-hint">Pool login password (default is 'x').</span>
+                            </div>
+                            <div class="toggle-row">
+                                <div class="toggle-copy">
+                                    <label class="input-label">Enable Pool SSL/TLS</label>
+                                    <span class="field-hint">Secure encrypted connections (requires pool support).</span>
+                                </div>
+                                <input type="checkbox" id="cfgPoolTls" class="toggle-input">
+                            </div>
+                            <div class="grid">
+                                <div class="input-group">
+                                    <label class="input-label" for="cfgBindPort">Proxy Port (Listen)</label>
+                                    <input type="number" id="cfgBindPort" class="input-field" placeholder="3333" required>
+                                    <span class="field-hint">Port where miners will connect to.</span>
+                                </div>
+                                <div class="input-group">
+                                    <label class="input-label" for="cfgBindHost">Proxy Host (Bind)</label>
+                                    <input type="text" id="cfgBindHost" class="input-field" placeholder="0.0.0.0" required>
+                                    <span class="field-hint">IP address to bind. Use 0.0.0.0 for public access.</span>
+                                </div>
+                            </div>
+                            <div class="grid">
+                                <div class="input-group">
+                                    <label class="input-label" for="cfgApiPort">Proxy HTTP API Port</label>
+                                    <input type="number" id="cfgApiPort" class="input-field" placeholder="8080" required>
+                                    <span class="field-hint">Port to publish proxy statistics (summary, miners).</span>
+                                </div>
+                                <div class="input-group">
+                                    <label class="input-label" for="cfgApiToken">Proxy HTTP API Token</label>
+                                    <input type="text" id="cfgApiToken" class="input-field" placeholder="Access token password">
+                                    <span class="field-hint">API security password. Leaves blank for unsecured.</span>
+                                </div>
+                            </div>
+                            <div class="grid">
+                                <div class="input-group">
+                                    <label class="input-label" for="cfgDonateLevel">Developer Donation (%)</label>
+                                    <input type="number" id="cfgDonateLevel" class="input-field" placeholder="0" min="0" max="99" required>
+                                    <span class="field-hint">Donate level to XMRig dev (min 0, max 99).</span>
+                                </div>
+                                <div class="toggle-row">
+                                    <div class="toggle-copy">
+                                        <label class="input-label">Verbose Output Logs</label>
+                                        <span class="field-hint">Enable detailed printouts for debug profiling.</span>
+                                    </div>
+                                    <input type="checkbox" id="cfgVerbose" class="toggle-input">
+                                </div>
+                            </div>
+                            <button type="submit" class="btn btn-block">
+                                <i data-lucide="save"></i> Save Configuration (config.json)
+                            </button>
+                        </form>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Main Dashboard Script -->
+    <script src="{{ url_for('static', filename='js/theme.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/script.js') }}"></script>
+</body>
+</html>

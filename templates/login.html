@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - NV Proxy Dashboard</title>
+    <script>
+        (function () {
+            try {
+                var saved = localStorage.getItem('nv-theme');
+                var system = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+                document.documentElement.dataset.theme = saved || system;
+            } catch (e) {
+                document.documentElement.dataset.theme = 'dark';
+            }
+        })();
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body class="login-body">
+    <button type="button" class="theme-toggle login-theme-toggle" data-theme-toggle aria-label="Switch color theme" title="Switch color theme">
+        <i data-lucide="sun"></i>
+    </button>
+
+    <div class="login-panel">
+        <div class="brand login-brand">
+            <div class="logo">
+                <i data-lucide="layers" class="brand-icon"></i>
+            </div>
+            <div class="brand-text">
+                <h2>NV Proxy</h2>
+                <span>Dashboard Access</span>
+            </div>
+        </div>
+
+        <div class="config-title">Sign In</div>
+
+        {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                <div class="error login-error">
+                    {{ messages[0] }}
+                </div>
+            {% endif %}
+        {% endwith %}
+
+        <form method="POST" action="{{ url_for('login') }}" class="dashboard-form">
+            <div class="input-group">
+                <label class="input-label">Username</label>
+                <input type="text" name="username" class="input-field" placeholder="Enter your username" autocomplete="username" autofocus required>
+            </div>
+            <div class="input-group">
+                <label class="input-label">Password</label>
+                <input type="password" name="password" class="input-field" placeholder="Enter your password" autocomplete="current-password" required>
+            </div>
+            <button type="submit" class="btn btn-block login-submit">
+                Access Dashboard
+            </button>
+        </form>
+    </div>
+    
+    <script src="{{ url_for('static', filename='js/theme.js') }}"></script>
+    <script>
+        lucide.createIcons();
+    </script>
+</body>
+</html>
